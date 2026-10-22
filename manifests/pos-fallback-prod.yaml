@@ -1,0 +1,52 @@
+# Azure Container App: atlasone-pos-fallback-prod
+# Create:  az containerapp create -n atlasone-pos-fallback-prod -g atlasone-core --yaml manifests/pos-fallback-prod.yaml
+# Pulls from ACR with the user-assigned managed identity atlasone-acrpull-id (needs AcrPull on atlasoneacr).
+location: eastus
+name: atlasone-pos-fallback-prod
+resourceGroup: atlasone-core
+type: Microsoft.App/containerApps
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    /subscriptions/89f827c6-d82e-41a3-95d5-bbffc115fc9c/resourceGroups/atlasone-core/providers/Microsoft.ManagedIdentity/userAssignedIdentities/atlasone-acrpull-id: {}
+properties:
+  managedEnvironmentId: /subscriptions/89f827c6-d82e-41a3-95d5-bbffc115fc9c/resourceGroups/atlasone-core/providers/Microsoft.App/managedEnvironments/managedEnvironment-atlasonecore-8480
+  configuration:
+    activeRevisionsMode: Single
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: auto
+    registries:
+      - server: atlasoneacr.azurecr.io
+        identity: /subscriptions/89f827c6-d82e-41a3-95d5-bbffc115fc9c/resourceGroups/atlasone-core/providers/Microsoft.ManagedIdentity/userAssignedIdentities/atlasone-acrpull-id
+  template:
+    containers:
+      - name: pos-fallback
+        image: atlasoneacr.azurecr.io/pos-fallback:latest
+        resources:
+          cpu: 1.0
+          memory: 2Gi
+        env:
+          - name: APP_ENV
+            value: production
+          - name: PORT
+            value: "8080"
+          - name: HEALTH_ENDPOINT
+            value: /health
+        probes:
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          - type: Readiness
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+    scale:
+      minReplicas: 1
+      maxReplicas: 3
